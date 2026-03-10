@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Content Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a1f44;
+    --bg2: #0d2550;
+    --surface: rgba(255,255,255,0.04);
+    --surface2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.1);
+    --accent: #3b82f6;
+    --accent2: #06b6d4;
+    --accent3: #8b5cf6;
+    --green: #10b981;
+    --red: #ef4444;
+    --text: #ffffff;
+    --muted: rgba(255,255,255,0.5);
+    --glow: rgba(59,130,246,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Floating orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    animation: floatOrb 12s ease-in-out infinite;
+  }
+  .orb1 { width:500px; height:500px; background:rgba(59,130,246,0.12); top:-150px; right:-150px; animation-delay:0s; }
+  .orb2 { width:400px; height:400px; background:rgba(139,92,246,0.1); bottom:-100px; left:-100px; animation-delay:-4s; }
+  .orb3 { width:300px; height:300px; background:rgba(6,182,212,0.08); top:40%; left:40%; animation-delay:-8s; }
+
+  @keyframes floatOrb {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33% { transform: translate(30px,-20px) scale(1.05); }
+    66% { transform: translate(-20px,30px) scale(0.95); }
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+    animation: fadeDown 0.8s ease both;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59,130,246,0.15);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .badge::before { content:'●'; font-size:8px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fff 30%, rgba(59,130,246,0.9) 70%, rgba(139,92,246,0.9) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+
+  .subtitle {
+    font-size: clamp(0.95rem, 2vw, 1.1rem);
+    color: var(--muted);
+    max-width: 520px;
+    margin: 0 auto;
+    line-height: 1.65;
+    font-weight: 300;
+  }
+
+  /* Tab selector */
+  .tabs {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 4px;
+    margin-bottom: 24px;
+    gap: 4px;
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--surface2); }
+  .tab-btn.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    color: white;
+    box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+  }
+  .tab-btn svg { flex-shrink:0; }
+
+  /* Upload card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    animation: fadeUp 0.8s 0.3s ease both;
+    backdrop-filter: blur(10px);
+  }
+
+  .upload-panel { display: none; padding: 28px; }
+  .upload-panel.active { display: block; }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed rgba(59,130,246,0.3);
+    border-radius: 14px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .dropzone::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background: radial-gradient(ellipse at center, rgba(59,130,246,0.05) 0%, transparent 70%);
+    transition: opacity 0.3s;
+    opacity: 0;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(59,130,246,0.05);
+  }
+  .dropzone:hover::before, .dropzone.drag-over::before { opacity: 1; }
+
+  .dz-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 16px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2));
+    border-radius: 16px;
+    display: flex; align-items:center; justify-content:center;
+    transition: transform 0.3s;
+  }
+  .dropzone:hover .dz-icon { transform: scale(1.08) rotate(-3deg); }
+
+  .dz-title { font-family:'Syne',sans-serif; font-size:1rem; font-weight:600; margin-bottom:6px; }
+  .dz-sub { font-size:0.82rem; color:var(--muted); }
+  .dz-sub span { color:var(--accent); font-weight:500; cursor:pointer; }
+  .dz-formats { margin-top:10px; font-size:0.75rem; color:rgba(255,255,255,0.25); }
+
+  input[type="file"] { display:none; }
+
+  /* Preview */
+  .preview-wrap {
+    margin-top: 20px;
+    display: none;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+  .preview-wrap.show { display: block; }
+  .preview-wrap img, .preview-wrap video {
+    width: 100%; max-height: 300px;
+    object-fit: contain;
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
+  }
+  .preview-name {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex; align-items:center; gap:6px;
+  }
+  .preview-name::before { content:'📎'; }
+
+  /* URL input */
+  .url-field {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .url-input {
+    flex: 1;
+    min-width: 200px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 18px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .url-input::placeholder { color: rgba(255,255,255,0.2); }
+  .url-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+
+  /* Analyze button */
+  .btn-analyze {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 15px 28px;
+    margin-top: 20px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent3) 100%);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.01em;
+  }
+  .btn-analyze::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .btn-analyze:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(59,130,246,0.4); }
+  .btn-analyze:hover::before { opacity: 1; }
+  .btn-analyze:active { transform: translateY(0); }
+  .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Processing */
+  #processing {
+    display: none;
+    text-align: center;
+    padding: 48px 24px;
+    animation: fadeIn 0.4s ease;
+  }
+  #processing.show { display: block; }
+
+  .scan-ring {
+    width: 80px; height: 80px;
+    margin: 0 auto 24px;
+    position: relative;
+  }
+  .scan-ring::before, .scan-ring::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px solid transparent;
+  }
+  .scan-ring::before {
+    border-top-color: var(--accent);
+    border-right-color: var(--accent);
+    animation: spin 1s linear infinite;
+  }
+  .scan-ring::after {
+    border-bottom-color: var(--accent3);
+    border-left-color: var(--accent3);
+    animation: spin 1.5s linear infinite reverse;
+    inset: 8px;
+  }
+  .scan-core {
+    position: absolute;
+    inset: 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 50%;
+    animation: corePulse 1s ease-in-out infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes corePulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(0.85);opacity:0.7} }
+
+  .proc-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .proc-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 28px; }
+
+  .progress-bar-wrap {
+    background: rgba(255,255,255,0.06);
+    border-radius: 100px;
+    height: 6px;
+    overflow: hidden;
+    max-width: 360px;
+    margin: 0 auto 12px;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    border-radius: 100px;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .progress-bar::after {
+    content:'';
+    position:absolute;
+    top:0;bottom:0;
+    width:60px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shimmer 1s infinite;
+  }
+  @keyframes shimmer { 0%{left:-60px} 100%{left:100%} }
+  .progress-label { font-size: 0.78rem; color: var(--muted); }
+
+  .scan-steps {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.3);
+    transition: color 0.4s;
+  }
+  .step.done { color: var(--green); }
+  .step.active { color: var(--accent2); }
+  .step-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .step.active .step-dot { animation: pulse 0.8s infinite; }
+
+  /* Result */
+  #result {
+    display: none;
+    padding: 28px;
+    animation: fadeIn 0.5s ease;
+  }
+  #result.show { display: block; }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .result-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .verdict-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 22px;
+    border-radius: 100px;
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    animation: verdictPop 0.5s 0.1s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes verdictPop { from{transform:scale(0.6);opacity:0} to{transform:scale(1);opacity:1} }
+
+  .verdict-badge.real {
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.4);
+    color: var(--green);
+  }
+  .verdict-badge.ai {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.4);
+    color: var(--red);
+  }
+
+  /* Confidence */
+  .conf-section { margin: 24px 0; }
+  .conf-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .conf-name { font-size: 0.85rem; color: var(--muted); }
+  .conf-pct {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .conf-bar-wrap {
+    background: rgba(255,255,255,0.06);
+    border-radius: 100px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .conf-bar {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+    width: 0%;
+  }
+  .conf-bar.high { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .conf-bar.med { background: linear-gradient(90deg, #f59e0b, #f97316); }
+  .conf-bar.low { background: linear-gradient(90deg, var(--red), #f59e0b); }
+
+  /* Detail breakdown */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .detail-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    animation: fadeUp 0.5s ease both;
+  }
+  .detail-item:nth-child(2) { animation-delay: 0.07s; }
+  .detail-item:nth-child(3) { animation-delay: 0.14s; }
+  .detail-item:nth-child(4) { animation-delay: 0.21s; }
+
+  .detail-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 6px; }
+  .detail-bar-wrap { background: rgba(255,255,255,0.06); border-radius:100px; height:4px; margin-bottom:6px; overflow:hidden; }
+  .detail-bar { height:100%; border-radius:100px; background: linear-gradient(90deg,var(--accent),var(--accent3)); transition: width 1.2s ease; }
+  .detail-pct { font-family:'Syne',sans-serif; font-size:0.95rem; font-weight:600; }
+
+  /* Reset */
+  .btn-reset {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px;
+    margin-top: 24px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .btn-reset:hover { border-color: rgba(255,255,255,0.3); color: var(--text); background: var(--surface2); }
+
+  /* How it works */
+  .how-section {
+    margin-top: 48px;
+    animation: fadeUp 0.8s 0.5s ease both;
+  }
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.3);
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .how-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    transition: transform 0.3s, border-color 0.3s;
+  }
+  .how-item:hover { transform: translateY(-4px); border-color: rgba(59,130,246,0.3); }
+  .how-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .how-title { font-family:'Syne',sans-serif; font-size:0.95rem; font-weight:600; margin-bottom:6px; }
+  .how-desc { font-size:0.8rem; color:var(--muted); line-height:1.55; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.2);
+    animation: fadeUp 0.8s 0.6s ease both;
+  }
+
+  /* Animations */
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-24px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  /* Responsive */
+  @media(max-width:560px) {
+    .scan-steps { gap: 12px; }
+    .result-header { flex-direction: column; }
+    .tabs { flex-direction: column; }
+    .tab-btn { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="wrapper">
+
+  <header>
+    <div class="badge">v2.0 · Neural Analysis Engine</div>
+    <h1>AI Content Detector</h1>
+    <p class="subtitle">Upload an image, video, or paste a link to check whether it is real or AI-generated.</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" onclick="switchTab('image')" role="tab">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      Image
+    </button>
+    <button class="tab-btn" onclick="switchTab('video')" role="tab">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="15" height="16" rx="2"/><path d="m17 8 5-2v12l-5-2"/></svg>
+      Video
+    </button>
+    <button class="tab-btn" onclick="switchTab('url')" role="tab">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      URL Link
+    </button>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+
+    <!-- Image upload panel -->
+    <div class="upload-panel active" id="panel-image">
+      <input type="file" id="imageFile" accept="image/*">
+      <div class="dropzone" id="dz-image" onclick="document.getElementById('imageFile').click()" ondragover="handleDrag(event,'dz-image')" ondragleave="endDrag('dz-image')" ondrop="handleDrop(event,'image')">
+        <div class="dz-icon">
+          <svg width="28" height="28" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        </div>
+        <div class="dz-title">Drop your image here</div>
+        <div class="dz-sub">or <span>browse to upload</span></div>
+        <div class="dz-formats">JPG · PNG · WEBP · GIF · up to 25MB</div>
+      </div>
+      <div class="preview-wrap" id="prev-image">
+        <img id="prev-image-el" src="" alt="Preview">
+        <div class="preview-name" id="prev-image-name"></div>
+      </div>
+      <button class="btn-analyze" id="btn-image" onclick="startAnalysis()" disabled>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Analyze Image
+      </button>
+    </div>
+
+    <!-- Video upload panel -->
+    <div class="upload-panel" id="panel-video">
+      <input type="file" id="videoFile" accept="video/*">
+      <div class="dropzone" id="dz-video" onclick="document.getElementById('videoFile').click()" ondragover="handleDrag(event,'dz-video')" ondragleave="endDrag('dz-video')" ondrop="handleDrop(event,'video')">
+        <div class="dz-icon">
+          <svg width="28" height="28" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="4" width="15" height="16" rx="2"/><path d="m17 8 5-2v12l-5-2"/></svg>
+        </div>
+        <div class="dz-title">Drop your video here</div>
+        <div class="dz-sub">or <span>browse to upload</span></div>
+        <div class="dz-formats">MP4 · MOV · AVI · WEBM · up to 100MB</div>
+      </div>
+      <div class="preview-wrap" id="prev-video">
+        <video id="prev-video-el" controls></video>
+        <div class="preview-name" id="prev-video-name"></div>
+      </div>
+      <button class="btn-analyze" id="btn-video" onclick="startAnalysis()" disabled>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Analyze Video
+      </button>
+    </div>
+
+    <!-- URL panel -->
+    <div class="upload-panel" id="panel-url">
+      <div style="margin-bottom:16px;">
+        <div class="dz-title" style="margin-bottom:6px; font-family:'Syne',sans-serif;">Paste a URL to analyze</div>
+        <div class="dz-sub" style="margin-bottom:20px;">Supports image URLs, YouTube links, social media posts, and more.</div>
+        <div class="url-field">
+          <input type="url" class="url-input" id="urlInput" placeholder="https://example.com/image.jpg" oninput="checkUrl()">
+        </div>
+      </div>
+      <button class="btn-analyze" id="btn-url" onclick="startAnalysis()" disabled>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Analyze URL
+      </button>
+    </div>
+
+    <!-- Processing -->
+    <div id="processing">
+      <div class="scan-ring"><div class="scan-core"></div></div>
+      <div class="proc-title">Analyzing Content</div>
+      <div class="proc-sub">Processing... Please wait while we analyze the content.</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="prog-bar"></div>
+      </div>
+      <div class="progress-label" id="prog-label">0%</div>
+      <div class="scan-steps">
+        <div class="step" id="step1"><div class="step-dot"></div>Extracting features</div>
+        <div class="step" id="step2"><div class="step-dot"></div>Pattern analysis</div>
+        <div class="step" id="step3"><div class="step-dot"></div>Neural inference</div>
+        <div class="step" id="step4"><div class="step-dot"></div>Compiling result</div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="result">
+      <div class="result-header">
+        <div class="result-label">Detection Result</div>
+        <div class="verdict-badge" id="verdict-badge"></div>
+      </div>
+
+      <div class="conf-section">
+        <div class="conf-header">
+          <span class="conf-name">Overall Confidence</span>
+          <span class="conf-pct" id="conf-pct">0%</span>
+        </div>
+        <div class="conf-bar-wrap">
+          <div class="conf-bar" id="conf-bar"></div>
+        </div>
+      </div>
+
+      <div class="detail-grid" id="detail-grid"></div>
+
+      <button class="btn-reset" onclick="resetAll()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Analyze another file
+      </button>
+    </div>
+
+  </div>
+
+  <!-- How it works -->
+  <div class="how-section">
+    <div class="section-title">How it works</div>
+    <div class="how-grid">
+      <div class="how-item">
+        <div class="how-num">STEP 01</div>
+        <div class="how-title">Upload Content</div>
+        <div class="how-desc">Provide an image, video, or URL. Supports all major formats and platforms.</div>
+      </div>
+      <div class="how-item">
+        <div class="how-num">STEP 02</div>
+        <div class="how-title">Neural Analysis</div>
+        <div class="how-desc">Our model scans for AI artifacts, GAN fingerprints, and diffusion patterns.</div>
+      </div>
+      <div class="how-item">
+        <div class="how-num">STEP 03</div>
+        <div class="how-title">Get Results</div>
+        <div class="how-desc">Receive a clear verdict with confidence score and detailed breakdown.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    AI Content Detector · Built for transparency in the age of generative AI
+  </footer>
+
+</div>
+
+<script>
+  let currentTab = 'image';
+  let hasFile = { image: false, video: false, url: false };
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach((b,i) => {
+      b.classList.toggle('active', ['image','video','url'][i] === tab);
+    });
+    document.querySelectorAll('.upload-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + tab).classList.add('active');
+    hideResultAndProcessing();
+  }
+
+  function hideResultAndProcessing() {
+    document.getElementById('processing').classList.remove('show');
+    document.getElementById('result').classList.remove('show');
+  }
+
+  // File input handlers
+  document.getElementById('imageFile').addEventListener('change', e => handleFile(e.target.files[0], 'image'));
+  document.getElementById('videoFile').addEventListener('change', e => handleFile(e.target.files[0], 'video'));
+
+  function handleFile(file, type) {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (type === 'image') {
+      document.getElementById('prev-image-el').src = url;
+      document.getElementById('prev-image-name').textContent = file.name;
+      document.getElementById('prev-image').classList.add('show');
+      document.getElementById('btn-image').disabled = false;
+    } else {
+      document.getElementById('prev-video-el').src = url;
+      document.getElementById('prev-video-name').textContent = file.name;
+      document.getElementById('prev-video').classList.add('show');
+      document.getElementById('btn-video').disabled = false;
+    }
+    hasFile[type] = true;
+  }
+
+  // Drag & drop
+  function handleDrag(e, id) {
+    e.preventDefault();
+    document.getElementById(id).classList.add('drag-over');
+  }
+  function endDrag(id) {
+    document.getElementById(id).classList.remove('drag-over');
+  }
+  function handleDrop(e, type) {
+    e.preventDefault();
+    endDrag('dz-' + type);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file, type);
+  }
+
+  // URL check
+  function checkUrl() {
+    const val = document.getElementById('urlInput').value.trim();
+    document.getElementById('btn-url').disabled = val.length < 8;
+  }
+
+  // === ANALYSIS (mock — wire your API here) ===
+  function startAnalysis() {
+    // Hide upload panels
+    document.querySelectorAll('.upload-panel').forEach(p => p.style.display = 'none');
+    hideResultAndProcessing();
+    const proc = document.getElementById('processing');
+    proc.classList.add('show');
+
+    // Reset steps
+    ['step1','step2','step3','step4'].forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('done','active');
+    });
+
+    // Animate progress
+    let pct = 0;
+    const bar = document.getElementById('prog-bar');
+    const lbl = document.getElementById('prog-label');
+
+    const steps = [
+      { id:'step1', target: 25, delay: 300 },
+      { id:'step2', target: 55, delay: 900 },
+      { id:'step3', target: 82, delay: 1700 },
+      { id:'step4', target: 100, delay: 2500 },
+    ];
+
+    steps.forEach((s, i) => {
+      setTimeout(() => {
+        if (i > 0) document.getElementById(steps[i-1].id).classList.replace('active','done');
+        document.getElementById(s.id).classList.add('active');
+      }, s.delay);
+    });
+
+    const interval = setInterval(() => {
+      if (pct < 100) {
+        pct += Math.random() * 4;
+        if (pct > 100) pct = 100;
+        bar.style.width = pct + '%';
+        lbl.textContent = Math.floor(pct) + '%';
+      }
+    }, 80);
+
+    // After ~3.2s show result
+    setTimeout(() => {
+      clearInterval(interval);
+      bar.style.width = '100%'; lbl.textContent = '100%';
+      document.getElementById('step4').classList.replace('active','done');
+
+      setTimeout(() => {
+        proc.classList.remove('show');
+        showResult();
+        document.querySelectorAll('.upload-panel').forEach(p => p.style.display = '');
+        document.getElementById('panel-' + currentTab).classList.add('active');
+        document.getElementById('panel-' + currentTab).style.display = 'none';
+      }, 400);
+    }, 3200);
+  }
+
+  function showResult() {
+    // ── Replace this block with real API response ──
+    const isAI = Math.random() > 0.45;
+    const confidence = isAI
+      ? Math.floor(72 + Math.random() * 25)
+      : Math.floor(70 + Math.random() * 27);
+
+    const details = isAI
+      ? [
+          { name: 'GAN Fingerprint', score: Math.floor(65 + Math.random()*30) },
+          { name: 'Diffusion Artifacts', score: Math.floor(60 + Math.random()*35) },
+          { name: 'Texture Anomaly', score: Math.floor(55 + Math.random()*35) },
+          { name: 'Noise Pattern', score: Math.floor(50 + Math.random()*40) },
+        ]
+      : [
+          { name: 'Natural Noise', score: Math.floor(70 + Math.random()*25) },
+          { name: 'Lens Distortion', score: Math.floor(65 + Math.random()*28) },
+          { name: 'Authentic Texture', score: Math.floor(72 + Math.random()*22) },
+          { name: 'Metadata Integrity', score: Math.floor(68 + Math.random()*26) },
+        ];
+    // ── End of mock block ──
+
+    const badge = document.getElementById('verdict-badge');
+    badge.className = 'verdict-badge ' + (isAI ? 'ai' : 'real');
+    badge.innerHTML = isAI
+      ? '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> AI Generated'
+      : '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> Real';
+
+    // Confidence bar
+    const confPct = document.getElementById('conf-pct');
+    const confBar = document.getElementById('conf-bar');
+    confBar.className = 'conf-bar ' + (confidence >= 80 ? 'high' : confidence >= 60 ? 'med' : 'low');
+
+    // Animate count-up
+    let c = 0;
+    const ci = setInterval(() => {
+      c += 2;
+      if (c >= confidence) { c = confidence; clearInterval(ci); }
+      confPct.textContent = c + '%';
+    }, 18);
+    setTimeout(() => { confBar.style.width = confidence + '%'; }, 100);
+
+    // Detail grid
+    const grid = document.getElementById('detail-grid');
+    grid.innerHTML = '';
+    details.forEach((d, i) => {
+      const div = document.createElement('div');
+      div.className = 'detail-item';
+      div.style.animationDelay = (i * 0.07) + 's';
+      div.innerHTML = `
+        <div class="detail-name">${d.name}</div>
+        <div class="detail-bar-wrap"><div class="detail-bar" id="db-${i}" style="width:0%"></div></div>
+        <div class="detail-pct">${d.score}%</div>`;
+      grid.appendChild(div);
+      setTimeout(() => {
+        document.getElementById('db-' + i).style.width = d.score + '%';
+      }, 200 + i * 80);
+    });
+
+    document.getElementById('result').classList.add('show');
+  }
+
+  function resetAll() {
+    document.getElementById('result').classList.remove('show');
+    document.querySelectorAll('.upload-panel').forEach(p => {
+      p.style.display = '';
+      p.classList.remove('active');
+    });
+    document.getElementById('panel-' + currentTab).classList.add('active');
+
+    // Reset previews
+    document.getElementById('prev-image').classList.remove('show');
+    document.getElementById('prev-video').classList.remove('show');
+    document.getElementById('imageFile').value = '';
+    document.getElementById('videoFile').value = '';
+    document.getElementById('urlInput').value = '';
+    document.getElementById('btn-image').disabled = true;
+    document.getElementById('btn-video').disabled = true;
+    document.getElementById('btn-url').disabled = true;
+    hasFile = { image: false, video: false, url: false };
+    document.getElementById('prog-bar').style.width = '0%';
+  }
+</script>
+</body>
+</html>
